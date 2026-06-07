@@ -1,6 +1,6 @@
-import { useState, useEffect }           from 'react';
-import { useParams, useNavigate, Link }  from 'react-router-dom';
-import { getProductById }                from '../../services/catalogueService';
+import { useState, useEffect }          from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { getProductById }               from '../../services/catalogueService';
 
 const Star = ({ filled }) => (
   <svg className={`w-5 h-5 ${filled ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20">
@@ -16,12 +16,12 @@ function ReviewCard({ review }) {
     <div className="border-b border-gray-100 last:border-0 py-5">
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold text-purple-600 flex-shrink-0">
-          {review.user?.name?.charAt(0).toUpperCase() || '?'}
+          {review.buyer?.name?.charAt(0).toUpperCase() || '?'}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-800">{review.user?.name || 'Anonyme'}</span>
+              <span className="text-sm font-semibold text-gray-800">{review.buyer?.name || 'Anonyme'}</span>
               <div className="flex">{[1,2,3,4,5].map(s => <Star key={s} filled={s <= (review.rating || 0)} />)}</div>
             </div>
             {date && <span className="text-xs text-gray-400">{date}</span>}
@@ -47,7 +47,7 @@ export default function ProductDetail() {
       setError(null);
       try {
         const res = await getProductById(id);
-        setProduct(res.data?.data || res.data);
+        setProduct(res.data);
       } catch {
         setError('Impossible de charger ce produit.');
       } finally {
@@ -88,11 +88,13 @@ export default function ProductDetail() {
     );
   }
 
-  const formattedPrice = Number(product.price || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 });
-  const reviews        = product.reviews || [];
-  const avgRating      = product.average_rating ?? (reviews.length ? reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviews.length : 0);
-  const isOutOfStock   = product.stock === 0;
-  const isLowStock     = !isOutOfStock && product.stock <= 5;
+  const formattedPrice = Number(product.effective_price || product.price || 0).toLocaleString('fr-FR', {
+    style: 'currency', currency: 'XOF', minimumFractionDigits: 0,
+  });
+  const reviews      = product.reviews || [];
+  const avgRating    = Number(product.rating || 0);
+  const isOutOfStock = product.quantity === 0;
+  const isLowStock   = !isOutOfStock && product.quantity <= 5;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -103,51 +105,74 @@ export default function ProductDetail() {
           {product.category?.name && (
             <><Link to={`/products?category_id=${product.category.id}`} className="hover:text-purple-600 transition">{product.category.name}</Link><span>›</span></>
           )}
-          <span className="text-gray-600 truncate max-w-xs">{product.name}</span>
+          <span className="text-gray-600 truncate max-w-xs">{product.title}</span>
         </nav>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 bg-white rounded-2xl p-8 shadow-sm border border-gray-100 mb-8">
           <div className="relative rounded-xl overflow-hidden bg-gray-50 aspect-square">
-            {product.image_url ? (
-              <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+            {product.image ? (
+              <img src={product.image} alt={product.title} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
                 <span className="text-7xl mb-3">🛍️</span>
                 <span className="text-sm">Aucune image disponible</span>
               </div>
             )}
+            {product.is_on_sale && (
+              <span className="absolute top-4 right-4 px-3 py-1 text-xs font-bold bg-red-500 text-white rounded-full shadow">
+                Promo
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col gap-4">
-            {product.category?.name && <span className="text-xs font-medium text-purple-600 uppercase tracking-wider">{product.category.name}</span>}
-            <h1 className="text-2xl font-bold text-gray-900 leading-tight">{product.name}</h1>
-            {reviews.length > 0 && (
+            {product.category?.name && (
+              <span className="text-xs font-medium text-purple-600 uppercase tracking-wider">{product.category.name}</span>
+            )}
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">{product.title}</h1>
+
+            {avgRating > 0 && (
               <div className="flex items-center gap-2">
                 <div className="flex">{[1,2,3,4,5].map(s => <Star key={s} filled={s <= Math.round(avgRating)} />)}</div>
                 <span className="text-sm font-semibold text-gray-700">{avgRating.toFixed(1)}</span>
-                <span className="text-sm text-gray-400">({reviews.length} avis)</span>
+                <span className="text-sm text-gray-400">({product.total_reviews} avis)</span>
               </div>
             )}
-            <div className="mt-2">
+
+            <div className="mt-2 flex items-center gap-3">
               <span className="text-3xl font-bold text-purple-700">{formattedPrice}</span>
+              {product.is_on_sale && (
+                <span className="text-lg text-gray-400 line-through">
+                  {Number(product.price).toLocaleString('fr-FR', { style: 'currency', currency: 'XOF', minimumFractionDigits: 0 })}
+                </span>
+              )}
             </div>
+
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${isOutOfStock ? 'bg-red-400' : isLowStock ? 'bg-orange-400' : 'bg-green-400'}`} />
               <span className={`text-sm font-medium ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-green-700'}`}>
-                {isOutOfStock ? 'Rupture de stock' : isLowStock ? `Plus que ${product.stock} en stock` : `${product.stock} en stock`}
+                {isOutOfStock ? 'Rupture de stock' : isLowStock ? `Plus que ${product.quantity} en stock` : `${product.quantity} en stock`}
               </span>
             </div>
+
             {product.description && (
               <div className="mt-2">
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</h2>
                 <p className="text-sm text-gray-600 leading-relaxed">{product.description}</p>
               </div>
             )}
+
             {product.seller?.name && (
-              <div className="mt-2 pt-4 border-t border-gray-100 text-sm text-gray-500">
-                Vendu par <span className="font-medium text-gray-700">{product.seller.name}</span>
+              <div className="mt-2 pt-4 border-t border-gray-100">
+                <p className="text-sm text-gray-500">
+                  Vendu par <span className="font-medium text-gray-700">{product.seller.name}</span>
+                </p>
+                {product.seller.city && (
+                  <p className="text-xs text-gray-400 mt-1">📍 {product.seller.city}</p>
+                )}
               </div>
             )}
+
             <div className="mt-auto pt-4">
               <button disabled={isOutOfStock} className="w-full py-3 px-6 rounded-xl text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm hover:shadow-md">
                 {isOutOfStock ? 'Indisponible' : '🛒 Ajouter au panier'}
@@ -158,7 +183,10 @@ export default function ProductDetail() {
 
         <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-gray-900">Avis clients {reviews.length > 0 && <span className="ml-2 text-sm font-normal text-gray-400">({reviews.length} avis)</span>}</h2>
+            <h2 className="text-lg font-bold text-gray-900">
+              Avis clients
+              {reviews.length > 0 && <span className="ml-2 text-sm font-normal text-gray-400">({reviews.length} avis)</span>}
+            </h2>
             {reviews.length > 0 && (
               <div className="flex items-center gap-2 bg-amber-50 rounded-xl px-4 py-2">
                 <span className="text-2xl font-bold text-amber-600">{avgRating.toFixed(1)}</span>

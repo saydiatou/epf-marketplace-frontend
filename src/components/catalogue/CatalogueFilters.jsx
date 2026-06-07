@@ -1,15 +1,15 @@
 import { useState } from 'react';
 
 const SORT_OPTIONS = [
-  { label: 'Plus récents',     sort: 'created_at', order: 'desc' },
-  { label: 'Prix croissant',   sort: 'price',       order: 'asc'  },
-  { label: 'Prix décroissant', sort: 'price',       order: 'desc' },
-  { label: 'Nom A → Z',        sort: 'name',        order: 'asc'  },
+  { label: 'Plus récents',   sort: 'newest'     },
+  { label: 'Plus vendus',    sort: 'popular'    },
+  { label: 'Prix croissant', sort: 'cheapest'   },
+  { label: 'Mieux notés',    sort: 'most_rated' },
 ];
 
 export default function CatalogueFilters({ categories, filters, setCategory, setSort, setPriceRange, resetFilters }) {
-  const [localPriceMin, setLocalPriceMin] = useState(filters.price_min || '');
-  const [localPriceMax, setLocalPriceMax] = useState(filters.price_max || '');
+  const [localPriceMin, setLocalPriceMin] = useState(filters.min_price || '');
+  const [localPriceMax, setLocalPriceMax] = useState(filters.max_price || '');
 
   const handlePriceBlur = () => setPriceRange(localPriceMin, localPriceMax);
 
@@ -62,10 +62,10 @@ export default function CatalogueFilters({ categories, filters, setCategory, set
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trier par</h3>
         <ul className="space-y-1">
           {SORT_OPTIONS.map((option) => {
-            const isActive = filters.sort === option.sort && filters.order === option.order;
+            const isActive = filters.sort === option.sort;
             return (
               <li key={option.label}>
-                <button onClick={() => setSort(option.sort, option.order)} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition flex items-center gap-2 ${isActive ? 'text-purple-700 font-medium bg-purple-50' : 'text-gray-600 hover:bg-gray-100'}`}>
+                <button onClick={() => setSort(option.sort)} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition flex items-center gap-2 ${isActive ? 'text-purple-700 font-medium bg-purple-50' : 'text-gray-600 hover:bg-gray-100'}`}>
                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isActive ? 'bg-purple-600' : 'bg-transparent'}`} />
                   {option.label}
                 </button>

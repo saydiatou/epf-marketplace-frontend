@@ -2,23 +2,22 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getProducts, getCategories, searchCatalogue } from '../services/catalogueService';
 
 export function useCatalogue() {
-  const [products, setProducts]         = useState([]);
-  const [categories, setCategories]     = useState([]);
-  const [meta, setMeta]                 = useState(null);
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState(null);
-  const [filters, setFilters]           = useState({
+  const [products, setProducts]       = useState([]);
+  const [categories, setCategories]   = useState([]);
+  const [meta, setMeta]               = useState(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState(null);
+  const [filters, setFilters]         = useState({
     category_id : '',
-    price_min   : '',
-    price_max   : '',
-    sort        : 'created_at',
-    order       : 'desc',
+    min_price   : '',
+    max_price   : '',
+    sort        : 'newest',
     page        : 1,
     per_page    : 12,
   });
-  const [searchQuery, setSearchQuery]       = useState('');
-  const [searchResults, setSearchResults]   = useState(null);
-  const [searchLoading, setSearchLoading]   = useState(false);
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const searchTimer = useRef(null);
 
   useEffect(() => {
@@ -41,8 +40,8 @@ export function useCatalogue() {
       try {
         const res = await getProducts(filters);
         const payload = res.data;
-        setProducts(Array.isArray(payload) ? payload : payload?.data || []);
-        setMeta(payload?.meta || null);
+        setProducts(payload?.data || []);
+        setMeta(payload?.pagination || null);
       } catch {
         setError('Impossible de charger les produits.');
         setProducts([]);
@@ -78,12 +77,12 @@ export function useCatalogue() {
     setSearchQuery('');
   }, []);
 
-  const setSort = useCallback((sort, order = 'asc') => {
-    setFilters(prev => ({ ...prev, sort, order, page: 1 }));
+  const setSort = useCallback((sort) => {
+    setFilters(prev => ({ ...prev, sort, page: 1 }));
   }, []);
 
-  const setPriceRange = useCallback((price_min, price_max) => {
-    setFilters(prev => ({ ...prev, price_min, price_max, page: 1 }));
+  const setPriceRange = useCallback((min_price, max_price) => {
+    setFilters(prev => ({ ...prev, min_price, max_price, page: 1 }));
   }, []);
 
   const setPage = useCallback((page) => {
@@ -94,10 +93,9 @@ export function useCatalogue() {
   const resetFilters = useCallback(() => {
     setFilters({
       category_id : '',
-      price_min   : '',
-      price_max   : '',
-      sort        : 'created_at',
-      order       : 'desc',
+      min_price   : '',
+      max_price   : '',
+      sort        : 'newest',
       page        : 1,
       per_page    : 12,
     });
