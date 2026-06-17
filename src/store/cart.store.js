@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { cartService } from '../services/cart.service'
 
 export const useCartStore = create((set, get) => ({
   items: [],
@@ -10,7 +11,7 @@ export const useCartStore = create((set, get) => ({
     set({
       items: payload.items ?? [],
       total: payload.total ?? '0.00',
-      itemCount: payload.item_count ?? 0,
+      itemCount: payload.item_count ?? payload.items?.length ?? 0,
     })
   },
 
@@ -18,9 +19,34 @@ export const useCartStore = create((set, get) => ({
     set({ items: [], total: '0.00', itemCount: 0 })
   },
 
-  // Méthodes fetch/add/update — implémentées par le binôme (buyer)
   async refresh() {
-    // placeholder pour éviter les erreurs d'import côté Navbar
-    return get()
+    try {
+      set({ isLoading: true })
+      const res = await cartService.getCart()
+      const data = res.data
+      set({
+        items: data.items || [],
+        total: data.total || '0.00',
+        itemCount: data.items?.length || 0,
+        isLoading: false,
+      })
+    } catch {
+      set({ isLoading: false })
+    }
+  },
+
+  async addItem(product_id, quantity = 1) {
+    await cartService.addItem(product_id, quantity)
+    await get().refresh()
+  },
+
+  async updateItem(cartItemId, quantity) {
+    await cartService.updateItem(cartItemId, quantity)
+    await get().refresh()
+  },
+
+  async removeItem(cartItemId) {
+    await cartService.removeItem(cartItemId)
+    await get().refresh()
   },
 }))

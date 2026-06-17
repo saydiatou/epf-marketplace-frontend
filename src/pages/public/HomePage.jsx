@@ -4,13 +4,14 @@ import { getCategories, getProducts } from '../../services/catalogueService'
 import { ROUTES } from '../../constants/routes'
 import { Spinner } from '../../components/ui/Spinner'
 import { useAuth } from '../../hooks/useAuth'
+import { useCart } from '../../hooks/useCart'
 import api from '../../services/api' // Instance Axios configurée (baseURL + intercepteurs)
 
 // ----- CONSTANTES -----
 const BLEU = '#1E3A8A'
 const BLEU_CLAIR = '#3B82F6'
 
-// Images Pexels pour les catégories
+// Images Pexels pour les catégories (clé = nom de catégorie en base)
 const CAT_IMAGES = {
   'Électronique': 'https://images.pexels.com/photos/2115217/pexels-photo-2115217.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop',
   'Maison': 'https://images.pexels.com/photos/276583/pexels-photo-276583.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop',
@@ -31,7 +32,7 @@ const DEFAULT_PROD_IMGS = [
   'https://picsum.photos/id/26/300/300',
 ]
 
-function getCatImg(cat) { return CAT_IMAGES[cat] || 'https://via.placeholder.com/100?text=Cat' }
+function getCatImg(name) { return CAT_IMAGES[name] || 'https://via.placeholder.com/100?text=Cat' }
 function getProdImg(prod) { return prod.image || DEFAULT_PROD_IMGS[(prod.id || 0) % DEFAULT_PROD_IMGS.length] }
 const formatPrice = p => (parseFloat(p || 0)).toLocaleString('fr-FR') + ' FCFA'
 
@@ -44,8 +45,15 @@ function ProductCard({ product, onClick }) {
     <div onClick={onClick} className="bg-white rounded-lg border p-3 cursor-pointer hover:shadow-md flex gap-3 h-[130px]">
       <div className="w-1/3 h-full flex items-center"><img src={getProdImg(product)} alt={product.title} className="max-w-full max-h-full object-contain" /></div>
       <div className="w-2/3 flex flex-col justify-between">
-        <div><h3 className="text-xs font-semibold line-clamp-2">{product.title}</h3><p className="text-[10px] text-slate-400">{product.seller?.name || 'Vendeur'}</p><div className="flex gap-1 mt-1 text-[11px]"><span className="text-yellow-500">★</span><span>{product.rating || 4.5}</span><span className="text-slate-400">({product.total_reviews || 0})</span></div></div>
-        <div className="flex justify-between items-center mt-1"><span className="text-xs font-bold" style={{ color: BLEU }}>{formatPrice(finalPrice)}</span>{discount && <span className="text-[10px] text-red-500 bg-red-50 px-1 rounded">-{discount}%</span>}</div>
+        <div>
+          <h3 className="text-xs font-semibold line-clamp-2">{product.title}</h3>
+          <p className="text-[10px] text-slate-400">{product.seller?.name || 'Vendeur'}</p>
+          <div className="flex gap-1 mt-1 text-[11px]"><span className="text-yellow-500">★</span><span>{product.rating || 4.5}</span><span className="text-slate-400">({product.total_reviews || 0})</span></div>
+        </div>
+        <div className="flex justify-between items-center mt-1">
+          <span className="text-xs font-bold" style={{ color: BLEU }}>{formatPrice(finalPrice)}</span>
+          {discount && <span className="text-[10px] text-red-500 bg-red-50 px-1 rounded">-{discount}%</span>}
+        </div>
       </div>
     </div>
   )
@@ -54,9 +62,10 @@ function ProductCard({ product, onClick }) {
 export default function HomePage() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+  const { itemCount } = useCart()
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('')
-  const [categories, setCategories] = useState([])
+  const [selectedCategory, setSelectedCategory] = useState('') // stocke maintenant l'ID, pas le nom
+  const [categories, setCategories] = useState([]) // tableau d'objets {id, name, ...}
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -65,11 +74,11 @@ export default function HomePage() {
   const [priceMin, setPriceMin] = useState('')
   const [priceMax, setPriceMax] = useState('')
 
-  // Chargement des catégories
+  // Chargement des catégories — on garde l'objet complet (id + name) pour pouvoir filtrer par ID
   useEffect(() => {
     getCategories().then(res => {
       const data = res.data?.data || res.data || []
-      setCategories(data.map(c => typeof c === 'string' ? c : c.name))
+      setCategories(data)
     }).catch(() => {})
   }, [])
 
@@ -80,14 +89,15 @@ export default function HomePage() {
       sort,
       page,
       per_page: 4,
-      ...(selectedCategory && { category: selectedCategory }),
+      ...(selectedCategory && { category_id: selectedCategory }),
       ...(priceMin && { min_price: priceMin }),
       ...(priceMax && { max_price: priceMax }),
     }
     getProducts(params).then(res => {
-      const data = res.data?.data || res.data || []
+      const payload = res.data
+      const data = payload?.data || []
       setProducts(data)
-      setTotalPages(Math.ceil((res.data?.total || data.length) / 4))
+      setTotalPages(payload?.pagination?.last_page || 1)
     }).catch(() => setProducts([])).finally(() => setLoading(false))
   }, [page, sort, selectedCategory, priceMin, priceMax])
 
@@ -95,18 +105,14 @@ export default function HomePage() {
   const handleGlobalSearch = async (e) => {
     e.preventDefault()
     if (!searchQuery.trim()) return
-    setLoading(true)
-    try {
-      const res = await api.get('/search', { params: { q: searchQuery, type: 'all' } })
-      setProducts(res.data?.data || res.data || [])
-      setTotalPages(1)
-      setPage(1)
-    } catch (err) {
-      console.error("Erreur recherche globale", err)
-      setProducts([])
-    } finally {
-      setLoading(false)
-    }
+    navigate(`${ROUTES.PRODUCTS}?q=${encodeURIComponent(searchQuery.trim())}`)
+  }
+
+  const handleCategoryClick = (categoryId) => {
+    setSelectedCategory(categoryId)
+    setPage(1)
+    // On scrolle directement vers la section produits pour que l'effet du clic soit visible
+    document.getElementById('produits-section')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   const resetFilters = () => {
@@ -117,7 +123,8 @@ export default function HomePage() {
     setPage(1)
   }
 
-  const displayCategories = categories.length ? categories.slice(0, 6) : ['Électronique', 'Maison', 'Mode', 'Loisirs', 'Fournitures de bureau', 'Santé et sécurité']
+  // displayCategories est maintenant un tableau d'objets {id, name}
+  const displayCategories = categories.slice(0, 6)
 
   return (
     <div className="bg-white min-h-screen">
@@ -141,7 +148,11 @@ export default function HomePage() {
         <div className="flex items-center gap-5 text-xs font-medium">
           <div onClick={() => navigate(ROUTES.CART)} className="flex items-center gap-1.5 cursor-pointer relative">
             <span className="text-base">🛒</span>
-            <span className="absolute -top-1.5 -right-1.5 text-white text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center" style={{ backgroundColor: BLEU }}>2</span>
+            {itemCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 text-white text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center" style={{ backgroundColor: BLEU }}>
+                {itemCount}
+              </span>
+            )}
             <span>Panier</span>
           </div>
           <button onClick={() => navigate(isAuthenticated ? ROUTES.PROFILE : ROUTES.LOGIN)} className="hover:opacity-80" style={{ color: BLEU_CLAIR }}>
@@ -159,17 +170,17 @@ export default function HomePage() {
       <div className="border-y bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-9 flex items-center gap-6 text-[11px] font-semibold overflow-x-auto whitespace-nowrap">
           <span className="flex items-center gap-1 border-r pr-4 h-full">≡ Catégories</span>
-          {displayCategories.slice(0, 7).map(cat => (
+          {displayCategories.map(cat => (
             <span
-              key={cat}
-              onClick={() => { setSelectedCategory(cat); setPage(1) }}
+              key={cat.id}
+              onClick={() => handleCategoryClick(cat.id)}
               className="cursor-pointer hover:opacity-80"
-              style={{ color: BLEU_CLAIR }}
+              style={{ color: selectedCategory === cat.id ? BLEU : BLEU_CLAIR, fontWeight: selectedCategory === cat.id ? 700 : 600 }}
             >
-              {cat}
+              {cat.name}
             </span>
           ))}
-          <span onClick={() => { setSelectedCategory(''); setPage(1) }} className="cursor-pointer text-slate-400">Toutes</span>
+          <span onClick={() => handleCategoryClick('')} className="cursor-pointer text-slate-400">Toutes</span>
         </div>
       </div>
 
@@ -197,27 +208,32 @@ export default function HomePage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
           {displayCategories.map(cat => (
             <div
-              key={cat}
-              onClick={() => { setSelectedCategory(cat); setPage(1) }}
-              className="bg-white border border-slate-100 rounded-xl p-3 flex flex-col items-center text-center cursor-pointer hover:shadow-md transition hover:scale-105"
+              key={cat.id}
+              onClick={() => handleCategoryClick(cat.id)}
+              className="bg-white border rounded-xl p-3 flex flex-col items-center text-center cursor-pointer hover:shadow-md transition hover:scale-105"
+              style={{ borderColor: selectedCategory === cat.id ? BLEU : '#f1f5f9', borderWidth: selectedCategory === cat.id ? 2 : 1 }}
             >
-              <img src={getCatImg(cat)} alt={cat} className="w-full max-w-[100px] h-auto aspect-square object-cover rounded-lg mb-2" />
-              <span className="text-xs font-semibold text-slate-700">{cat}</span>
+              <img src={getCatImg(cat.name)} alt={cat.name} className="w-full max-w-[100px] h-auto aspect-square object-cover rounded-lg mb-2" />
+              <span className="text-xs font-semibold text-slate-700">{cat.name}</span>
             </div>
           ))}
         </div>
       </section>
 
       {/* ========== PRODUITS LES PLUS VENDUS ========== */}
-      <section className="max-w-7xl mx-auto px-6 mt-8 mb-12">
+      <section id="produits-section" className="max-w-7xl mx-auto px-6 mt-8 mb-12">
         <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
-          <h2 className="text-sm font-bold text-slate-900">Produits les plus vendus</h2>
+          <h2 className="text-sm font-bold text-slate-900">
+            {selectedCategory
+              ? `Produits — ${categories.find(c => c.id === selectedCategory)?.name || ''}`
+              : 'Produits les plus vendus'}
+          </h2>
           <div className="flex flex-wrap gap-2 text-xs items-center">
             <select value={sort} onChange={e => { setSort(e.target.value); setPage(1) }} className="border rounded px-2 py-1">
               <option value="popular">Populaire</option>
               <option value="newest">Nouveautés</option>
-              <option value="price_asc">Prix croissant</option>
-              <option value="price_desc">Prix décroissant</option>
+              <option value="cheapest">Prix croissant</option>
+              <option value="most_rated">Mieux notés</option>
             </select>
             <input type="number" placeholder="Prix min" value={priceMin} onChange={e => setPriceMin(e.target.value)} className="w-20 border rounded px-1 py-1 text-xs" />
             <input type="number" placeholder="Prix max" value={priceMax} onChange={e => setPriceMax(e.target.value)} className="w-20 border rounded px-1 py-1 text-xs" />
@@ -227,6 +243,11 @@ export default function HomePage() {
 
         {loading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
+        ) : products.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">
+            <p className="text-3xl mb-3">📦</p>
+            <p className="text-sm">Aucun produit trouvé pour ces filtres.</p>
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -234,9 +255,9 @@ export default function HomePage() {
             </div>
             {totalPages > 1 && (
               <div className="flex justify-center gap-2 mt-6">
-                <button disabled={page === 1} onClick={() => setPage(p => p-1)} className="px-3 py-1 border rounded disabled:opacity-50">Précédent</button>
+                <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50">Précédent</button>
                 <span className="px-3 py-1">Page {page} / {totalPages}</span>
-                <button disabled={page === totalPages} onClick={() => setPage(p => p+1)} className="px-3 py-1 border rounded disabled:opacity-50">Suivant</button>
+                <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50">Suivant</button>
               </div>
             )}
           </>
@@ -248,10 +269,10 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
             <div><h3 className="text-white font-bold text-lg">EPF MARKETPLACE</h3><p className="text-xs mt-2">© 2024 EPF Marketplace</p></div>
-            <div><h4 className="text-white text-sm mb-3">Service client</h4><ul className="space-y-1 text-xs">{['FAQ','Livraison','Retours','Contact'].map(l => <li key={l}><a href="#" onClick={e => { e.preventDefault(); navigate('/'+l.toLowerCase()) }} className="hover:text-white">{l}</a></li>)}</ul></div>
-            <div><h4 className="text-white text-sm mb-3">Vendeurs</h4><ul className="space-y-1 text-xs">{['Vendre sur EPF','Centre vendeur','Politiques','Ressources'].map(l => <li key={l}><a href="#" onClick={e => { e.preventDefault(); navigate('/'+l.toLowerCase().replace(/ /g,'-')) }} className="hover:text-white">{l}</a></li>)}</ul></div>
-            <div><h4 className="text-white text-sm mb-3">Entreprise</h4><ul className="space-y-1 text-xs">{['À propos','Carrières','Confidentialité','CGV'].map(l => <li key={l}><a href="#" onClick={e => { e.preventDefault(); navigate('/'+l.toLowerCase().replace(/ /g,'-')) }} className="hover:text-white">{l}</a></li>)}</ul></div>
-            <div><h4 className="text-white text-sm mb-3">Suivez-nous</h4><div className="flex gap-3 text-xl">{['📘','📸','🐦','💼'].map((icon,i) => <a key={i} href="#" onClick={e => { e.preventDefault(); window.open(['https://facebook.com','https://instagram.com','https://twitter.com','https://linkedin.com'][i], '_blank') }} className="hover:text-white">{icon}</a>)}</div></div>
+            <div><h4 className="text-white text-sm mb-3">Service client</h4><ul className="space-y-1 text-xs">{['FAQ', 'Livraison', 'Retours', 'Contact'].map(l => <li key={l}><a href="#" onClick={e => { e.preventDefault(); navigate('/' + l.toLowerCase()) }} className="hover:text-white">{l}</a></li>)}</ul></div>
+            <div><h4 className="text-white text-sm mb-3">Vendeurs</h4><ul className="space-y-1 text-xs">{['Vendre sur EPF', 'Centre vendeur', 'Politiques', 'Ressources'].map(l => <li key={l}><a href="#" onClick={e => { e.preventDefault(); navigate('/' + l.toLowerCase().replace(/ /g, '-')) }} className="hover:text-white">{l}</a></li>)}</ul></div>
+            <div><h4 className="text-white text-sm mb-3">Entreprise</h4><ul className="space-y-1 text-xs">{['À propos', 'Carrières', 'Confidentialité', 'CGV'].map(l => <li key={l}><a href="#" onClick={e => { e.preventDefault(); navigate('/' + l.toLowerCase().replace(/ /g, '-')) }} className="hover:text-white">{l}</a></li>)}</ul></div>
+            <div><h4 className="text-white text-sm mb-3">Suivez-nous</h4><div className="flex gap-3 text-xl">{['📘', '📸', '🐦', '💼'].map((icon, i) => <a key={i} href="#" onClick={e => { e.preventDefault(); window.open(['https://facebook.com', 'https://instagram.com', 'https://twitter.com', 'https://linkedin.com'][i], '_blank') }} className="hover:text-white">{icon}</a>)}</div></div>
           </div>
           <div className="border-t border-slate-800 mt-8 pt-6 text-center text-xs">© 2026 EPF Marketplace. Tous droits réservés.</div>
         </div>

@@ -6,6 +6,7 @@ import { ProtectedRoute } from './components/guards/ProtectedRoute'
 import { RoleRoute } from './components/guards/RoleRoute'
 import { AuthLayout } from './components/layout/AuthLayout'
 import { DashboardLayout } from './components/layout/DashboardLayout'
+// import { PublicLayout } from './components/layout/PublicLayout'
 import { Spinner } from './components/ui/Spinner'
 
 // ─── TON BLOC (Auth + Seller + Admin) ───
@@ -42,44 +43,32 @@ function Lazy({ children }) {
 }
 
 export const router = createBrowserRouter([
+  // Public catalogue + Buyer (binôme) — avec Navbar globale
   // Public catalogue (binôme)
-  {
-    path: ROUTES.HOME,
-    element: <Lazy><HomePage /></Lazy>,
-  },
-  {
-    path: ROUTES.PRODUCTS,
-    element: <Lazy><ProductsPage /></Lazy>,
-  },
-  {
-    path: ROUTES.PRODUCT_DETAIL(':id'),
-    element: <Lazy><ProductDetailPage /></Lazy>,
-  },
-  {
-    path: ROUTES.SELLER_PROFILE(':id'),
-    element: <Lazy><SellerProfilePage /></Lazy>,
-  },
+{ path: ROUTES.HOME, element: <Lazy><HomePage /></Lazy> },
+{ path: ROUTES.PRODUCTS, element: <Lazy><ProductsPage /></Lazy> },
+{ path: ROUTES.PRODUCT_DETAIL(':id'), element: <Lazy><ProductDetailPage /></Lazy> },
+{ path: ROUTES.SELLER_PROFILE(':id'), element: <Lazy><SellerProfilePage /></Lazy> },
 
-  // Auth
+// Buyer (binôme) — routes protégées
+{
+  element: <ProtectedRoute />,
+  children: [
+    { path: ROUTES.CART, element: <Lazy><CartPage /></Lazy> },
+    { path: ROUTES.CHECKOUT, element: <Lazy><CheckoutPage /></Lazy> },
+    { path: ROUTES.ORDERS, element: <Lazy><MyOrdersPage /></Lazy> },
+    { path: ROUTES.ORDER_DETAIL(':id'), element: <Lazy><OrderDetailPage /></Lazy> },
+    { path: ROUTES.FAVORITES, element: <Lazy><FavoritesPage /></Lazy> },
+    { path: ROUTES.MESSAGES, element: <Lazy><MessagesPage /></Lazy> },
+    { path: ROUTES.PROFILE, element: <Lazy><ProfilePage /></Lazy> },
+  ],
+},
+  // Auth (sans Navbar)
   {
     element: <AuthLayout />,
     children: [
       { path: ROUTES.LOGIN, element: <LoginPage /> },
       { path: ROUTES.REGISTER, element: <RegisterPage /> },
-    ],
-  },
-
-  // Buyer (binôme) — routes protégées
-  {
-    element: <ProtectedRoute />,
-    children: [
-      { path: ROUTES.CART, element: <Lazy><CartPage /></Lazy> },
-      { path: ROUTES.CHECKOUT, element: <Lazy><CheckoutPage /></Lazy> },
-      { path: ROUTES.ORDERS, element: <Lazy><MyOrdersPage /></Lazy> },
-      { path: ROUTES.ORDER_DETAIL(':id'), element: <Lazy><OrderDetailPage /></Lazy> },
-      { path: ROUTES.FAVORITES, element: <Lazy><FavoritesPage /></Lazy> },
-      { path: ROUTES.MESSAGES, element: <Lazy><MessagesPage /></Lazy> },
-      { path: ROUTES.PROFILE, element: <Lazy><ProfilePage /></Lazy> },
     ],
   },
 
