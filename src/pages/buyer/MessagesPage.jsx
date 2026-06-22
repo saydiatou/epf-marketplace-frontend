@@ -175,4 +175,5 @@ export default function MessagesPage() {
       </div>
     </div>
   )
+  //Valider ensemble le diagramme UML avant de coder massivement.
 }
