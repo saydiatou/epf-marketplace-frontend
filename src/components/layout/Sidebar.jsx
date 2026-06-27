@@ -10,6 +10,8 @@ const sellerLinks = [
   { to: ROUTES.SELLER.PRODUCTS, label: 'Mes produits' },
   { to: ROUTES.SELLER.ORDERS, label: 'Commandes' },
   { to: ROUTES.SELLER.STATISTICS, label: 'Statistiques' },
+  { to: ROUTES.MESSAGES, label: 'Messages' },
+  { to: ROUTES.PROFILE, label: 'Mon profil' },
 ]
 
 const adminLinks = [
