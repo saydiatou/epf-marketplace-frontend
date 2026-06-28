@@ -56,7 +56,7 @@ export function ProductForm({ initialData = null, onSuccess }) {
 
   const price = watch('price')
 
-  async function onSubmit(values) {
+    async function onSubmit(values) {
     try {
       const formData = new FormData()
       formData.append('title', values.title)

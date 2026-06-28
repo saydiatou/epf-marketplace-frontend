@@ -16,15 +16,19 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false)
   const messagesEndRef = useRef(null)
 
-  useEffect(() => {
+  const loadConversations = () => {
     messageService.getConversations()
       .then(r => setConversations(r.data.data || r.data || []))
       .catch(() => toast.error('Impossible de charger les conversations'))
       .finally(() => setLoadingConvs(false))
+  }
+
+  useEffect(() => {
+    loadConversations()
   }, [])
 
   useEffect(() => {
-    if (!selectedConv) return
+    if (!selectedConv?.id) return
     setLoadingMsgs(true)
     messageService.getMessages(selectedConv.id)
       .then(r => setMessages(r.data.data || r.data || []))
@@ -38,13 +42,14 @@ export default function MessagesPage() {
 
   const handleSend = async (e) => {
     e.preventDefault()
-    if (!newMessage.trim() || !selectedConv) return
+    if (!newMessage.trim() || !selectedConv?.id) return
     setSending(true)
     try {
-      await messageService.sendMessage(selectedConv.id, newMessage.trim())
+      await messageService.sendMessage(selectedConv.id, newMessage.trim(), selectedConv.productId ?? null)
       setNewMessage('')
       const r = await messageService.getMessages(selectedConv.id)
       setMessages(r.data.data || r.data || [])
+      loadConversations()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Erreur envoi')
     } finally { setSending(false) }
@@ -52,6 +57,25 @@ export default function MessagesPage() {
 
   const formatTime = (date) => new Date(date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   const formatDate = (date) => new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+
+  const getSenderRole = (msg) => {
+    if (msg.sender?.id === user?.id) return user?.role || 'buyer'
+    if (user?.role === 'buyer') return 'seller'
+    if (user?.role === 'seller') return 'buyer'
+    return 'seller'
+  }
+
+  const getMessageStyle = (role) => {
+    if (role === 'seller') {
+      return { background: '#f0b429', color: '#1a1a2e' }
+    }
+    if (role === 'admin') {
+      return { background: '#ede9fe', color: '#5b21b6' }
+    }
+    return { background: '#dbeafe', color: '#1e3a8a' }
+  }
+
+  const sortedMessages = [...messages].reverse()
 
   return (
     <div style={{ background: '#f7f8fa', minHeight: '100vh' }}>
@@ -77,11 +101,12 @@ export default function MessagesPage() {
                 </div>
               ) : (
                 conversations.map(conv => {
-                  const other = conv.other_user || conv
+                  const other = conv.user
+                  if (!other) return null
                   const isSelected = selectedConv?.id === other.id
                   return (
-                    <div key={conv.id || other.id}
-                      onClick={() => setSelectedConv(other)}
+                    <div key={`${other.id}-${conv.product?.id || 0}`}
+                      onClick={() => setSelectedConv({ ...other, productId: conv.product?.id ?? null, productTitle: conv.product?.title })}
                       style={{ padding: '12px 16px', cursor: 'pointer', background: isSelected ? '#fff8e6' : 'transparent', borderLeft: isSelected ? '3px solid #f0b429' : '3px solid transparent', transition: 'all 0.15s' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f0b429', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a1a2e', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
@@ -89,13 +114,23 @@ export default function MessagesPage() {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: 12, fontWeight: 600, color: '#1a1a2e', marginBottom: 2 }}>{other.name}</p>
+                          {conv.product && (
+                            <p style={{ fontSize: 10, color: '#a0aec0', marginBottom: 2 }}>📦 {conv.product.title}</p>
+                          )}
                           <p style={{ fontSize: 11, color: '#718096', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {conv.last_message?.content || 'Démarrer une conversation'}
                           </p>
                         </div>
-                        {conv.last_message && (
-                          <span style={{ fontSize: 10, color: '#a0aec0', flexShrink: 0 }}>{formatDate(conv.last_message.created_at)}</span>
-                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                          {conv.last_message && (
+                            <span style={{ fontSize: 10, color: '#a0aec0' }}>{formatDate(conv.last_message.created_at)}</span>
+                          )}
+                          {conv.unread_count > 0 && (
+                            <span style={{ background: '#e53e3e', color: 'white', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '2px 6px', minWidth: 18, textAlign: 'center' }}>
+                              {conv.unread_count}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
@@ -121,7 +156,19 @@ export default function MessagesPage() {
                   </div>
                   <div>
                     <p style={{ fontSize: 13, fontWeight: 700, color: '#1a1a2e' }}>{selectedConv.name}</p>
-                    <p style={{ fontSize: 11, color: '#48bb78' }}>● En ligne</p>
+                    {selectedConv.productTitle && (
+                      <p style={{ fontSize: 11, color: '#718096' }}>📦 {selectedConv.productTitle}</p>
+                    )}
+                    <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                      <span style={{ fontSize: 10, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#dbeafe', border: '1px solid #1e3a8a', display: 'inline-block' }} />
+                        Acheteur
+                      </span>
+                      <span style={{ fontSize: 10, color: '#92400e', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f0b429', display: 'inline-block' }} />
+                        Vendeur
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -129,25 +176,29 @@ export default function MessagesPage() {
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {loadingMsgs ? (
                     <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spinner /></div>
-                  ) : messages.length === 0 ? (
+                  ) : sortedMessages.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 40, color: '#718096' }}>
                       <p style={{ fontSize: 12 }}>Aucun message. Commencez la conversation !</p>
                     </div>
                   ) : (
-                    messages.map(msg => {
-                      const isMine = msg.sender_id === user?.id
+                    sortedMessages.map(msg => {
+                      const isMine = msg.sender?.id === user?.id
+                      const senderRole = getSenderRole(msg)
+                      const style = getMessageStyle(senderRole)
                       return (
                         <div key={msg.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
                           <div style={{
-                            maxWidth: '68%', background: isMine ? '#f0b429' : '#f7f8fa',
-                            color: isMine ? '#1a1a2e' : '#2d3748',
+                            maxWidth: '68%',
+                            background: style.background,
+                            color: style.color,
                             borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
                             padding: '10px 14px'
                           }}>
+                            <p style={{ fontSize: 10, fontWeight: 600, opacity: 0.75, marginBottom: 4 }}>
+                              {senderRole === 'seller' ? '🏪 Vendeur' : senderRole === 'admin' ? '⚙️ Admin' : '🛒 Acheteur'}
+                              {isMine ? ' (vous)' : ''}
+                            </p>
                             <p style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 4 }}>{msg.content}</p>
-                            {msg.product && (
-                              <p style={{ fontSize: 10, opacity: 0.7, marginBottom: 2 }}>📦 {msg.product.title}</p>
-                            )}
                             <p style={{ fontSize: 10, opacity: 0.6, textAlign: 'right' }}>{formatTime(msg.created_at)}</p>
                           </div>
                         </div>
@@ -175,5 +226,4 @@ export default function MessagesPage() {
       </div>
     </div>
   )
-  //Valider ensemble le diagramme UML avant de coder massivement.
 }
